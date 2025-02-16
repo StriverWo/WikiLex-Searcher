@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WikiLex 搜索引擎首页</title>
+  <!-- 使用 Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: linear-gradient(to right, #f0f2f5, #ffffff);
+      font-family: 'Roboto', sans-serif;
+      padding-top: 60px;
+      min-height: 100vh;
+    }
+
+    .search-container {
+      max-width: 650px;
+      margin: 0 auto;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .search-container h1 {
+      font-size: 2.8rem;
+      color: #343a40;
+      margin-bottom: 30px;
+    }
+
+    .input-group {
+      border-radius: 50px;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .input-group .form-control {
+      border: none;
+      padding: 15px 20px;
+      font-size: 1.1rem;
+    }
+
+    .input-group .form-control:focus {
+      outline: none;
+      box-shadow: none;
+    }
+
+    .input-group .btn {
+      border: none;
+      background-color: #007bff;
+      color: #fff;
+      padding: 15px 25px;
+      font-size: 1.1rem;
+      transition: background-color 0.3s ease;
+    }
+
+    .input-group .btn:hover {
+      background-color: #0056b3;
+    }
+
+    .result-card {
+      margin-bottom: 20px;
+      border: none;
+      border-radius: 10px;
+      overflow: hidden;
+      background-color: #fff;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .result-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .result-card .card-body {
+      padding: 20px;
+    }
+
+    .result-card .card-title {
+      color: #007bff;
+      font-size: 1.6rem;
+      margin-bottom: 10px;
+    }
+
+    .result-card .card-text {
+      font-size: 1rem;
+      color: #555;
+      margin-bottom: 10px;
+    }
+
+    .result-card .btn {
+      font-size: 1rem;
+    }
+
+    /* 加载中动画居中 */
+    .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container search-container">
+    <h1>WikiLex 搜索引擎</h1>
+    <div class="input-group mb-4">
+      <input type="text" id="searchQuery" class="form-control" placeholder="请输入搜索关键词">
+      <button class="btn btn-primary" id="searchButton" type="button">搜索</button>
+    </div>
+    <div id="resultContainer"></div>
+  </div>
+
+  <!-- 引入 Bootstrap 5 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- 引入 jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    // 解析 JSON（移除 BOM，如果存在）
+    function parseJSON(data) {
+      data = data.replace(/^\uFEFF/, '');
+      try {
+        return JSON.parse(data);
+      } catch (e) {
+        console.error("JSON解析失败:", e);
+        return null;
+      }
+    }
+
+    $(document).ready(function () {
+      $("#searchButton").click(function () {
+        var query = $("#searchQuery").val().trim();
+        if (query === "") {
+          alert("请输入搜索关键词");
+          return;
+        }
+        $("#resultContainer").html('<div class="loading-container"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">加载中...</span></div></div>');
+        // 发起 GET 请求到 C++ 服务器，参数名 "search" 与后端保持一致
+        $.ajax({
+          url: "/s",
+          method: "GET",
+          data: { search: query },
+          dataType: "text",
+          success: function (response) {
+            response = response.trim();
+            var jsonData = parseJSON(response);
+            if (!jsonData) {
+              $("#resultContainer").html("<p>解析搜索结果失败，请稍后重试。</p>");
+              return;
+            }
+            if (jsonData.length === 0) {
+              $("#resultContainer").html("<p>没有找到相关结果。</p>");
+              return;
+            }
+            var html = "";
+            jsonData.forEach(function (item) {
+              html += '<div class="card result-card">';
+              html += '  <div class="card-body">';
+              html += '    <h5 class="card-title">' + item.title + '</h5>';
+              // 如果返回结果中包含语言、词形变化、释义等信息则显示，否则隐藏这些部分
+              if(item.language) {
+                html += '    <h6 class="card-subtitle mb-2 text-muted">语言: ' + item.language + '</h6>';
+              }
+              if(item.forms) {
+                html += '    <p class="card-text"><strong>词形变化:</strong> ' + item.forms + '</p>';
+              }
+              if(item.senses) {
+                html += '    <p class="card-text"><strong>释义:</strong> ' + item.senses + '</p>';
+              }
+              html += '    <a href="' + item.url + '" target="_blank" class="btn btn-primary">查看详情</a>';
+              html += '  </div>';
+              html += '</div>';
+            });
+            $("#resultContainer").html(html);
+          },
+          error: function (jqXHR, textStatus, errorThrown) {
+            console.error("请求失败:", textStatus, errorThrown);
+            $("#resultContainer").html("<p>搜索请求失败，请重试！</p>");
+          }
+        });
+      });
+    });
+  </script>
+</body>
+
+</html>
