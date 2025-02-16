@@ -42,7 +42,7 @@ foreach(src_file ${SRC_FILES})
     get_filename_component(exe_name ${src_file} NAME_WE)
     add_executable(${exe_name} ${src_file})
     # 链接 jsoncpp、pthread库（请根据实际情况调整库名称及顺序）
-    target_link_libraries(${exe_name} jsoncpp pthread)
+    target_link_libraries(${exe_name} jsoncpp pthread hiredis)
 endforeach()
 
 # 如果你需要单独设置某个目标的编译选项，也可以使用 target_compile_options() 命令

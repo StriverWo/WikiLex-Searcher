@@ -1,6 +1,7 @@
 #include "cpp-httplib/httplib.h"
 #include "lemsearcher.hpp"
-    
+#include "redis_util.hpp"
+
 const std::string input = "./data/simplified_lexemes.json";    
 const std::string vector_input = "./data/lexeme_vectors.txt";    
 const std::string root_path = "./lemwwwroot";    
@@ -48,7 +49,12 @@ std::vector<float> ParseEmbeddingString(const std::string &embedding_str) {
     return embedding;
 }
 
+
 int main() {
+    // 初始化 Redis 客户端
+    RedisUtil redis;
+    redis.connect();
+    
     // 1. 初始化，构建搜索索引
     ns_searcher::Searcher *search = new ns_searcher::Searcher();    
     search->InitSearcher(input,vector_input);  //初始化search，创建单例，并构建索引  
@@ -58,7 +64,7 @@ int main() {
     svr.set_base_dir(root_path.c_str());    // 访问首页
 
     // 3.构建服务端应答响应
-    svr.Get("/s", [&search](const httplib::Request &req, httplib::Response &rsp){
+    svr.Get("/s", [&search, &redis](const httplib::Request &req, httplib::Response &rsp){
         // has_para：这个函数用来检测用户的请求中是否有搜索关键字
         if(!req.has_param("search")){    
             rsp.set_content("必须要有搜索关键字!", "text/plain; charset=utf-8");    
@@ -68,6 +74,13 @@ int main() {
         // 获取用户输入的关键词
         std::string text = req.get_param_value("search");
         std::cout << "用户在搜索：" << text << std::endl;
+
+        // 热词统计
+        if(!redis.incrementWordCount(text)) {
+            // 注意：封闭函数局部变量不能在 lambda 体中引用，除非其位于捕获列表中
+            rsp.set_content("热词统计失败！", "text/plain; charset=utf-8");
+            return;
+        }
 
         std::vector<float> embedding_vector;
         try {
@@ -85,6 +98,27 @@ int main() {
         rsp.set_content(json_results,"application/json");
 
         std::cout << "用户搜索成功，结果已返回！" << std::endl;
+    });
+    
+    // 增加接口用来获取热词
+    svr.Get("/top-words", [&redis](const httplib::Request &req, httplib::Response &rsp) {
+        auto topWords = redis.getTopWords();
+        
+        Json::Value jsonResult; // 使用 jsoncpp 的 Json::Value 来构造 JSON 数据
+        
+        for (size_t i = 0; i < topWords.size(); ++i) {
+        
+            Json::Value wordObj;
+            wordObj["rank"] = static_cast<int>(i + 1);
+            wordObj["word"] = topWords[i];
+            jsonResult.append(wordObj); // 将每个热词对象添加到数组中
+        }
+
+        // 将 jsonResult 转换为字符串并设置响应内容
+        Json::StreamWriterBuilder writer;
+        std::string jsonString = Json::writeString(writer, jsonResult);
+        
+        rsp.set_content(jsonString, "application/json");
     });
 
 
