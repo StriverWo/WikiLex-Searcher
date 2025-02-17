@@ -12,7 +12,7 @@ gunzip wikidata-20250101-lexemes.json.gz
 ```
 如果是以.tar.gz或者.tar.tgz结尾的压缩文件，可以通过tar命令解压：
 ```
-tar  xxx.tar.gz
+tar -xzvf xxx.tar.gz
 ```
 这样在data目录下将生成原始的Wikidata语料库，名为wikidata-20250101-lexemes.json。它是一个JSON格式的文件，每一行代表一个JSON对象，解析时可以逐行读取。  
 Wikidata原始的JSON的结构信息可以参见官网：https://doc.wikimedia.org/Wikibase/master/php/docs_topics_json.html。
@@ -114,10 +114,231 @@ for (I←0; i<f; i++) do
 下图简单展示了通过多层结构的HNSW图的搜索过程：  
 ![image](https://github.com/user-attachments/assets/c4449225-ebc5-4e26-83b7-e0a4854afb70)
 
+***插入算法*** 
+INSERT(hnsw, q, M, Mmax, efConstruction, mL) ：将新元素 q 插入hnsw图中，M是每个元素需要与其他元素建立的连接数，Mmax是每个元素的最大连接数，efConstruction是动态候选集合的大小，mL是选择q层数的标准化因子。
+```
+INSERT(hnsw, q, M, Mmax, efConstruction, mL) 
+/** 
+ * 输入 
+ * hnsw：q插入的目标图 
+ * q：插入的新元素 
+ * M：每个点需要与图中其他的点建立的连接数 
+ * Mmax：最大的连接数，超过则需要进行缩减（shrink） 
+ * efConstruction：动态候选元素集合大小 
+ * mL：选择q的层数时用到的标准化因子 
+ */ 
+Input:  
+multilayer graph hnsw,  
+new element q,  
+number of established connections M,  
+maximum number of connections for each element per layer Mmax,  
+size of the dynamic candidate list efConstruction,  
+normalization factor for level generation mL 
+/** 
+ * 输出：新的hnsw图 
+ */ 
+Output: update hnsw inserting element q 
+ 
+W ← ∅  // W：现在发现的最近邻元素集合 
+// 查询进入点 
+ep ← get enter point for hnsw 
+L ← level of ep 
+/** 
+ * unif(0..1)是取0到1之中的随机数 
+ * 根据mL获取新元素q的层数l 
+ */ 
+l ← ⌊-ln(unif(0..1))∙mL⌋ 
+/** 
+ * 自顶层向q的层数l逼近搜索，一直到l+1,每层寻找当前层与q最近邻的1个点 
+ */ 
+for lc ← L … l+1 
+    // 以ep为入点，在lc层查找距离ep最近的1个元素 
+    W ← SEARCH_LAYER(q, ep, ef=1, lc) 
+    ep ← get the nearest element from W to q 
+ 
+// 自l层向底层逼近搜索,每层寻找当前层q最近邻的efConstruction个点赋值到集合W 
+for lc ← min(L, l) … 0 
+    // 以ep为入点，在lc层查找距离q最近的efConstruction个元素 
+    W ← SEARCH_LAYER(q, ep, efConstruction, lc) 
+    // 在W中选择q最近邻的M个点作为neighbors双向连接起来 
+    neighbors ← SELECT_NEIGHBORS(q, W, M, lc) 
+    add bidirectional connectionts from neighbors to q at layer lc 
+    // 检查每个neighbors的连接数，如果大于Mmax，则需要缩减连接到最近邻的Mmax个 
+    for each e ∈ neighbors 
+        eConn ← neighbourhood(e) at layer lc 
+        if │eConn│ > Mmax 
+            eNewConn ← SELECT_NEIGHBORS(e, eConn, Mmax, lc) 
+            set neighbourhood(e) at layer lc to eNewConn 
+    ep ← W 
+if l > L 
+    set enter point for hnsw to q 
+```
 
+插入时类似于跳表插入那样需要确定冲哪个层级开始往下插入。通过：l ← ⌊-ln(unif(0..1))∙mL 来进行确定。其中ml是工程实验确定的经验值，通常取值为 1/ln(M) ，其中 M 是每个节点在每一层的平均连接数。  
+有了起始的插入层级l，那么就可以往下层开始逐层插入该节点。但在此之前，需要确定每层距离该插入节点最近的节点集合。这个工作由SEARCH LAYER(q, ep, ef, lc)完成。
 
+***搜素当前层最近邻*** 
+SEARCH LAYER(q, ep, ef, lc) ：以ep为进入点，在第 lc 层查找距离 q 最近邻的 ef 个元素。
+```
+ SEARCH_LAYER(q, ep, ef, lc) 
+/** 
+ * 输入 
+ * q：插入的新元素 
+ * ep：进入点 enter point 
+ * ef：需要返回的近邻数量 
+ * lc：层数 
+ */ 
+Input:  
+query element q,  
+enter point ep,  
+number of nearest to q elements to return ef,  
+layer number lc 
+/** 
+ * 输出：q的ef个最近邻 
+ */ 
+Output: ef closest neighbors to q 
+ 
+// 将进入点放入候选集合 
+v ← ep  // v：设置访问过的元素 visited elements 
+C ← ep  // C：设置候选元素 candidates 
+W ← ep  // W：现在发现的最近邻元素集合 
+// 遍历每一个候选元素，包括遍历过程中不断加入的元素 
+while │C│ > 0 
+    // 取出候选集中q的最近邻c 
+    c ← extract nearest element from C to q 
+    // 取出W中q的最远点f 
+    f ← get furthest element from W to q 
+    // 当前次迭代不改变 近邻查找结果 
+    if distance(c, q) > distance(f, q)  
+        break 
+    /** 
+     * 当c比f距离q更近时，则将c的每一个邻居e都进行遍历 
+     * 如果邻居e比w中距离q最远的f要更接近q，那就把e加入到W和候选元素C中 
+     * 由此会不断地遍历图，直至达到局部最佳状态，c的所有邻居没有距离更近的了或者所有邻居都已经被遍历了 
+     */ 
+    for each e ∈ neighbourhood(c) at layer lc 
+        if e ∉ v 
+            v ← v ⋃ e 
+            f ← get furthest element from W to q 
+            // 判断邻节点是否会改变 近邻查找结果 
+            if distance(e, q) < distance(f, q) or │W│ < ef 
+                C ← C ⋃ e 
+                W ← W ⋃ e 
+                // 保证返回的数目不大于ef 
+                if │W│ > ef 
+                    remove furthest element from W to q 
+return W 
+```
+***截取集合最近邻*** 
+在 HNSW 中，SEARCH-LAYER(q, ep, ef, lc) 返回 efConstruction 个最近邻点，我们知道 efConstruction 的值是大于 M （每个节点相邻节点个数）的，那么怎么在efConstruction个点中选择 M 个来进行双向连接呢？有两种算法可供选择：  
+**简单选择算法 SELECT-NEIGHBORS-SIMPLE(q, C, M)**
+```
+SELECT_NEIGHBORS_SIMPLE(q, C, M) 
+/** 
+ * 输入 
+ * q：查询的点 
+ * C：候选元素集合 
+ * M：需要返回的数目 
+ */ 
+Input:  
+base element q,  
+candidate elements C,  
+number of neighbors to return M 
+/** 
+ * 输出：M个q的最近邻 
+ */ 
+Output: M nearest elements to q 
+ 
+return M nearest elements from C to q 
+```
+**启发式选择算法 SELECT-NEIGHBORS-HEURISTIC(q, C, M, lc,...)**
+```
+SELECT_NEIGHBORS_HEURISTIC(q, C, M, lc, extendCandidates, keepPrunedConnections) 
+/** 
+ * 输入 
+ * q：查询的点 
+ * C：候选元素集合，集合内元素数量大于M 
+ * M：需要返回的数目 
+ * lc：层数 
+ * extendCandidates：指示是否扩展候选列表的标志 
+ * keepPrunedConnections：指示是否添加丢弃元素的标志 
+ */ 
+Input:  
+base element q,  
+candidate elements C,  
+number of neighbors to return M,  
+layer number lc,  
+flag indicating whether or not to extend candidate list extendCandidates,  
+flag indicating whether or not to add discarded elements keepPrunedConnections 
+/** 
+ * 输出：探索得到M个元素 
+ */ 
+Output: M elements selected by the heuristic 
+ 
+R ← ∅ // 记录结果 
+W ← C  // W：候选元素的队列 
+if extendCandidates  // 通过邻居来扩充候选元素 
+    for each e ∈ C 
+        for each e_adj ∈ neighbourhood(e) at layer lc 
+            if e_adj ∉ W 
+                W ← W ⋃ e_adj 
+Wd ← ∅  // 丢弃的候选元素的队列 
+/** 
+ * 遍历候选集合队列 
+ * 候选元素队列不为空且结果数量少于M时，在W中选择q最近邻e 
+ * 如果e和q的距离比e和R（已建立连接点的集合）中的元素的距离更小，就把e加入到R中，否则就把e加入Wd（丢弃） 
+ * 可以理解成：如果R中存在点r，使distance(q,e)<distance(q,r)，则加入点e到R 
+ */ 
+while │W│ > 0 and │R│ < M 
+    // 在W中选择q最近邻e 
+    e ← extract nearest element from W to q 
+    // 如果e和q的距离比e和R中的元素的距离更小，就把e加入到R中，否则就把e加入Wd（丢弃） 
+    if e is closer to q compared to any element from R 
+        R ← R ⋃ e 
+    else 
+        Wd ← Wd ⋃ e 
+/** 
+ * 如果设置keepPrunedConnections为true，且R不满足M个，那就在丢弃队列中挑选最近邻填满R为M个 
+ */ 
+if keepPrunedConnections 
+    while │Wd│ > 0 and │R│ < M 
+        R ← R ⋃ extract nearest element from Wd to q 
+return R 
+```
 
-
-
-
+***KNN查询算法*** 
+KNN SEARCH(hnsw,q,K,ef) : 在 hnsw 索引中查询距离 q 最近邻的 K 个元素。
+```
+K-NN-SEARCH(hnsw, q, K, ef) 
+/** 
+ * 输入 
+ * hnsw：q插入的目标图 
+ * q：查询元素 
+ * K：返回的近邻数量 
+ * ef：动态候选元素集合大小 
+ */ 
+Input:  
+multilayer graph hnsw, query element q,  
+number of nearest neighbors to return K,  
+size of the dynamic candidate list ef 
+/** 
+ * 输出：q的K个最近邻元素 
+ */ 
+Output: K nearest elements to q 
+ 
+W ← ∅  // W：现在发现的最近邻元素集合 
+ep ← get enter point for hnsw 
+L ← level of ep 
+/** 
+ * 自顶层向倒数第2层逼近搜索,每层寻找当前层q最近邻的1个点赋值到集合W 
+ * 取W中最接近q的点作为底层的入口点，以便时搜索的时间成本最低 
+ */ 
+for lc ← L … 1 
+    W ← SEARCH_LAYER(q, ep, ef=1, lc) 
+    ep ← get nearest element from W to q 
+// 从上一层得到的ep点开始搜索底层获得ef个q的最近邻 
+W ← SEARCH_LAYER(q, ep, ef, lc=0) 
+// 从ef个选择K个最近邻 
+return K nearest elements from W to q 
+```
 
