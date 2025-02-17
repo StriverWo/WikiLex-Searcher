@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <jsoncpp/json/json.h>
 #include <algorithm>
+#include <memory>
 
 // 解析单个 lexeme 对象，并提取详细信息，仅保留英语条目
 Json::Value ProcessLexeme(const Json::Value &lex) {
