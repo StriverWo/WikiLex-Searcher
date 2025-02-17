@@ -465,6 +465,46 @@ SBERT 常用于文本相似度计算、语义搜索、聚类等任务，可以�
 源代码主要在src/lemsearcher.hpp中。  
 ### (1)查询预处理与向量化
 当用户提交查询时，系统会：使用分词工具 jieba 对查询文本进行分词，从而提取出查询关键词；同时将整个查询文本输入 Sentence‑BERT生成查询向量。
+***C++中并没有提供很好的接口加载模以进行文本向量化操作，所以该项目中使用 popen 函数来调用一个预先准备好的 python 脚本来进行对查询文本的向量化操作。***  
+#### popen详解：
+popen() 函数通过创建一个管道，调用 fork 产生一个子进程，执行一个 shell 以运行指定的命令来开启一个进程。  
+**工作原理**  
+
+    FILE* popen(const char *command, const char *mode);
+    1. 创建子进程：调用 popen 时，当前进程会启动一个子进程，该子进程通常通过调用 fork（在 UNIX-like 系统中）实现，然后在子进程中调用 execl 或类似的函数来启动 shell 并执行指定的命令。
+    2. 建立管道：父进程和子进程之间会建立一个单向通信管道：
+            如果模式为 "r"，管道的写端连接到子进程的标准输出，父进程可以读取子进程产生的数据。
+            如果模式为 "w"，管道的读端连接到子进程的标准输入，父进程可以向子进程写入数据。
+            返回文件流：父进程通过返回的 FILE* 流可以使用标准的输入/输出函数（如 fgets, fread, fprintf 等）与子进程进行通信。
+    3. 关闭管道：通信结束后，父进程应该调用 pclose 函数来关闭文件流，同时等待子进程结束，并返回子进程的退出状态。
+
+如下部分代码就是本项目中在 C++ 代码中调用 python 脚本的方法:  
+```
+std::string exec_python_vectorize(const std::string& input_text) {
+    // 构造调用命令，此处假设 python3 可执行文件在 PATH 中
+    // 你可以将输入文本作为命令行参数传递，但要注意转义空格和特殊字符
+    std::string command = "python3 /path/to/lemvectorize.py \"" + input_text + "\"";
+
+    // 打开管道读取脚本输出
+    FILE* pipe = popen(command.c_str(), "r");    // 参数"r"表示读取
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    
+    char buffer[128];
+    std::string result;
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result += buffer;
+    }
+    pclose(pipe);
+    // 去除末尾换行符
+    if (!result.empty() && result.back() == '\n') {
+        result.pop_back();
+    }
+    return result;
+}
+```
+
 
 ### (2) 倒排搜索
 根据查询关键词，在倒排索引中查找对应的词条，并根据关键词权重计算每个词条的倒排得分。该过程侧重于文本匹配，能捕捉用户输入与词条中显式出现的词语之间的联系。
