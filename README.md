@@ -341,4 +341,12 @@ W ← SEARCH_LAYER(q, ep, ef, lc=0)
 // 从ef个选择K个最近邻 
 return K nearest elements from W to q 
 ```
+### 2. HNSWLib库
+在lib下：https://github.com/nmslib/hnswlib 。
+
+## 四. BERT 模型
+
+
+
+
 
