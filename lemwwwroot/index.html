@@ -11,59 +11,55 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     body {
-      background: linear-gradient(to right, #f0f2f5, #ffffff);
+      background: linear-gradient(to right, #e0eafc, #cfdef3);
       font-family: 'Roboto', sans-serif;
-      padding-top: 60px;
+      padding-top: 70px;
       min-height: 100vh;
     }
-
     .search-container {
       max-width: 700px;
       margin: 0 auto;
       text-align: center;
       padding: 30px;
+      background-color: #ffffff;
+      border-radius: 15px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
     }
-
     .search-container h1 {
       font-size: 3rem;
       color: #343a40;
       margin-bottom: 30px;
     }
-
     .input-group {
       border-radius: 50px;
       overflow: hidden;
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
     }
-
     .input-group .form-control {
       border: none;
       padding: 15px 20px;
       font-size: 1.2rem;
     }
-
     .input-group .form-control:focus {
       outline: none;
       box-shadow: none;
     }
-
     .input-group .btn {
       border: none;
       background-color: #007bff;
       color: #fff;
       padding: 15px 25px;
       font-size: 1.2rem;
-      transition: background-color 0.3s ease;
+      transition: background-color 0.3s ease, transform 0.2s ease;
     }
-
     .input-group .btn:hover {
       background-color: #0056b3;
+      transform: scale(1.03);
     }
-
     .button-container {
       margin-top: 20px;
     }
-
     .btn-top-words {
       border: none;
       background-color: #28a745;
@@ -71,13 +67,12 @@
       padding: 12px 30px;
       font-size: 1.2rem;
       border-radius: 50px;
-      transition: background-color 0.3s ease;
+      transition: background-color 0.3s ease, transform 0.2s ease;
     }
-
     .btn-top-words:hover {
       background-color: #218838;
+      transform: scale(1.03);
     }
-
     .result-card {
       margin-bottom: 20px;
       border: none;
@@ -87,54 +82,85 @@
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
       transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-
     .result-card:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
     }
-
     .result-card .card-body {
       padding: 20px;
     }
-
     .result-card .card-title {
       color: #007bff;
       font-size: 1.6rem;
       margin-bottom: 10px;
     }
-
     .result-card .card-text {
       font-size: 1rem;
       color: #555;
       margin-bottom: 10px;
     }
-
     .result-card .btn {
       font-size: 1rem;
     }
-
-    /* 加载中动画居中 */
     .loading-container {
       display: flex;
       justify-content: center;
       align-items: center;
       padding: 40px;
     }
-
-    /* 热词排行榜样式 */
+    .top-words-container {
+      margin-top: 30px;
+      background-color: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+    }
+    .top-words-container h3 {
+      margin-bottom: 15px;
+    }
     .top-words-list {
       list-style-type: none;
       padding: 0;
     }
-
     .top-words-list li {
       font-size: 1.2rem;
       margin-bottom: 10px;
+      padding: 5px 10px;
+      background-color: #ffffff;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
-
     .top-words-list li span.rank {
       font-weight: bold;
       margin-right: 10px;
+      color: #007bff;
+    }
+    /* 搜索历史记录样式 */
+    .history-container {
+      margin-top: 30px;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    }
+    .history-container h3 {
+      margin-bottom: 15px;
+    }
+    .history-list {
+      list-style-type: none;
+      padding: 0;
+    }
+    .history-list li {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+      padding: 5px 10px;
+      background-color: #e9ecef;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .history-list li:hover {
+      background-color: #ced4da;
     }
   </style>
 </head>
@@ -146,11 +172,16 @@
       <input type="text" id="searchQuery" class="form-control" placeholder="请输入搜索关键词">
       <button class="btn btn-primary" id="searchButton" type="button">搜索</button>
     </div>
-    <div class="button-container">
-      <button class="btn-top-words" id="topWordsButton" type="button">查看热词</button>
+    <div class="button-container mb-4">
+      <button class="btn btn-success" id="topWordsButton" type="button">查看热词排行榜</button>
+    </div>
+    <!-- 搜索历史记录区域 -->
+    <div id="historyContainer" class="history-container">
+      <h3>搜索历史</h3>
+      <ul id="historyList" class="history-list"></ul>
     </div>
     <div id="resultContainer"></div>
-    <div id="topWordsContainer"></div> <!-- 新增热词容器 -->
+    <div id="topWordsContainer"></div>
   </div>
 
   <!-- 引入 Bootstrap 5 JS -->
@@ -158,7 +189,7 @@
   <!-- 引入 jQuery -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script>
-    // 解析 JSON（移除 BOM，如果存在）
+    // 移除 BOM 并解析 JSON 字符串
     function parseJSON(data) {
       data = data.replace(/^\uFEFF/, '');
       try {
@@ -169,62 +200,69 @@
       }
     }
 
-    // 搜索功能
+    // 搜索请求
     function search(query) {
       return $.ajax({
         url: "/s",
         method: "GET",
         data: { search: query },
-        dataType: "text",
+        dataType: "text"
       });
     }
 
-    // 热词功能
+    // 获取热词请求
     function fetchTopWords() {
       return $.ajax({
         url: "/top-words",
         method: "GET",
-        dataType: "text",
+        dataType: "text"
       });
     }
 
+    // 保存搜索历史到 localStorage
+    function saveHistory(query) {
+      let history = JSON.parse(localStorage.getItem("searchHistory")) || [];
+      // 如果历史记录中已有相同项则先删除
+      history = history.filter(item => item !== query);
+      history.unshift(query);
+      // 保留最近10条记录
+      if (history.length > 10) history = history.slice(0, 10);
+      localStorage.setItem("searchHistory", JSON.stringify(history));
+      renderHistory();
+    }
+
+    // 渲染搜索历史
+    function renderHistory() {
+      let history = JSON.parse(localStorage.getItem("searchHistory")) || [];
+      let html = "";
+      history.forEach(query => {
+        html += `<li>${query}</li>`;
+      });
+      $("#historyList").html(html);
+    }
+
     $(document).ready(function () {
-      // 页面加载时获取热词
-      $("#topWordsContainer").html('<div class="loading-container"><div class="spinner-border text-success" role="status"><span class="visually-hidden">加载热词...</span></div></div>');
-      fetchTopWords().done(function (response) {
-        response = response.trim();
-        var jsonData = parseJSON(response);
-        if (!jsonData) {
-          $("#topWordsContainer").html("<p>解析热词失败，请稍后重试。</p>");
-          return;
-        }
-        if (jsonData.length === 0) {
-          $("#topWordsContainer").html("<p>没有热词数据。</p>");
-          return;
-        }
-        var html = "<h3>热词排行榜</h3>";
-        html += '<ul class="top-words-list">';
-        jsonData.forEach(function (item) {
-          html += '<li><span class="rank">' + item.rank + '.</span>' + item.word + '</li>';
-        });
-        html += '</ul>';
-        $("#topWordsContainer").html(html);
-      }).fail(function (jqXHR, textStatus, errorThrown) {
-        console.error("请求失败:", textStatus, errorThrown);
-        $("#topWordsContainer").html("<p>热词请求失败，请重试！</p>");
+      renderHistory();
+
+      // 点击搜索历史记录时，自动填充搜索框并触发搜索
+      $("#historyList").on("click", "li", function () {
+        let query = $(this).text();
+        $("#searchQuery").val(query);
+        $("#searchButton").click();
       });
 
       $("#searchButton").click(function () {
-        var query = $("#searchQuery").val().trim();
+        let query = $("#searchQuery").val().trim();
         if (query === "") {
           alert("请输入搜索关键词");
           return;
         }
+        // 保存搜索历史
+        saveHistory(query);
         $("#resultContainer").html('<div class="loading-container"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">加载中...</span></div></div>');
-
         search(query).done(function (response) {
           response = response.trim();
-          var jsonData = parseJSON(response);
+          let jsonData = parseJSON(response);
           if (!jsonData) {
             $("#resultContainer").html("<p>解析搜索结果失败，请稍后重试。</p>");
             return;
@@ -233,14 +271,20 @@
             $("#resultContainer").html("<p>没有找到相关结果。</p>");
             return;
           }
-          var html = "";
+          let html = "";
           jsonData.forEach(function (item) {
             html += '<div class="card result-card">';
             html += '  <div class="card-body">';
             html += '    <h5 class="card-title">' + item.title + '</h5>';
-            if (item.language) html += '    <h6 class="card-subtitle mb-2 text-muted">语言: ' + item.language + '</h6>';
-            if (item.forms) html += '    <p class="card-text"><strong>词形变化:</strong> ' + item.forms + '</p>';
-            if (item.senses) html += '    <p class="card-text"><strong>释义:</strong> ' + item.senses + '</p>';
+            if (item.language) {
+              html += '    <h6 class="card-subtitle mb-2 text-muted">语言: ' + item.language + '</h6>';
+            }
+            if (item.forms) {
+              html += '    <p class="card-text"><strong>词形变化:</strong> ' + item.forms + '</p>';
+            }
+            if (item.senses) {
+              html += '    <p class="card-text"><strong>释义:</strong> ' + item.senses + '</p>';
+            }
             html += '    <a href="' + item.url + '" target="_blank" class="btn btn-primary">查看详情</a>';
             html += '  </div>';
             html += '</div>';
@@ -254,10 +298,9 @@
 
       $("#topWordsButton").click(function () {
         $("#topWordsContainer").html('<div class="loading-container"><div class="spinner-border text-success" role="status"><span class="visually-hidden">加载热词...</span></div></div>');
-
         fetchTopWords().done(function (response) {
           response = response.trim();
-          var jsonData = parseJSON(response);
+          let jsonData = parseJSON(response);
           if (!jsonData) {
             $("#topWordsContainer").html("<p>解析热词失败，请稍后重试。</p>");
             return;
@@ -266,7 +309,7 @@
             $("#topWordsContainer").html("<p>没有热词数据。</p>");
             return;
           }
-          var html = "<h3>热词排行榜</h3>";
+          let html = "<h3 class='mt-4 mb-3'>热词排行榜</h3>";
           html += '<ul class="top-words-list">';
           jsonData.forEach(function (item) {
             html += '<li><span class="rank">' + item.rank + '.</span>' + item.word + '</li>';

@@ -13,12 +13,19 @@ class RedisUtil {
 public:
     RedisUtil(const std::string& host = "127.0.0.1", int port = 6379);
     ~RedisUtil();
-
+    
+    // 连接redis服务器
     bool connect();
+
+    // 热词统计功能
     bool incrementWordCount(const std::string& word);
     int getWordCount(const std::string& word);
     std::vector<std::string> getTopWords(int limit = 10);
     std::vector<std::pair<std::string, int>> getTopWordsSorted(int limit = 10);
+
+    // 历史记录功能
+    bool logQuery(const std::string& query);
+    std::vector<std::string> getQueryHistory(int limit = 10);
 
 private:
     redisContext* context;
@@ -122,6 +129,35 @@ std::vector<std::pair<std::string, int>> RedisUtil::getTopWordsSorted(int limit)
     });
 
     return topWords;
+}
+
+
+bool RedisUtil::logQuery(const std::string& query) {
+    // 使用 LPUSH 将查询记录推入 "query_history" 列表中
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "LPUSH query_history %s", query.c_str()));
+    if (!reply) {
+        std::cerr << "Redis LPUSH command error for query history!" << std::endl;
+        return false;
+    }
+    freeReplyObject(reply);
+    // 限制列表长度为100（保留最近100条记录）
+    reply = static_cast<redisReply*>(redisCommand(context, "LTRIM query_history 0 99"));
+    if (reply) {
+        freeReplyObject(reply);
+    }
+    return true;
+}
+
+std::vector<std::string> RedisUtil::getQueryHistory(int limit) {
+    std::vector<std::string> history;
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "LRANGE query_history 0 %d", limit - 1));
+    if (reply && reply->type == REDIS_REPLY_ARRAY) {
+        for (size_t i = 0; i < reply->elements; i++) {
+            history.push_back(reply->element[i]->str);
+        }
+    }
+    freeReplyObject(reply);
+    return history;
 }
 
 #endif // REDIS_UTIL_HPP

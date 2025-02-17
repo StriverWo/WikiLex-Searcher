@@ -121,6 +121,17 @@ int main() {
         rsp.set_content(jsonString, "application/json");
     });
 
+    // 历史记录接口：获取最近的搜索历史记录
+    svr.Get("/history", [&redis](const httplib::Request &req, httplib::Response &rsp) {
+        auto history = redis.getQueryHistory(10);
+        Json::Value jsonResult;
+        for (const auto &entry : history) {
+            jsonResult.append(entry);
+        }
+        Json::StreamWriterBuilder writer;
+        std::string jsonString = Json::writeString(writer, jsonResult);
+        rsp.set_content(jsonString, "application/json");
+    });
 
     std::cout << "服务器启动成功......" << std::endl;
     svr.listen("0.0.0.0", 8080);
