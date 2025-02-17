@@ -344,7 +344,152 @@ return K nearest elements from W to q
 ### 2. HNSWLib库
 在lib下：https://github.com/nmslib/hnswlib 。
 
-## 四. BERT 模型
+## 四. 文本向量化
+### 1. Transformer
+参考链接：https://blog.csdn.net/weixin_42475060/article/details/121101749 ， https://www.zhihu.com/tardis/zm/art/600773858 。  
+这里只是我的学习记录笔记。  
+#### （1）Transformer整体结构
+机器翻译中，Transformer可以将一种语言翻译成另一种语言：  
+![image](https://github.com/user-attachments/assets/0b73e641-ee32-4c10-81e4-f1719a6999d4)
+
+事实上，它内部由若干个编码器和解码器组成：
+![image](https://github.com/user-attachments/assets/0dcb48d1-ee43-43d8-8c51-9ebe10258be6)
+
+继续将Encoder和Decoder拆开，得到完整的结构：  
+![image](https://github.com/user-attachments/assets/c7339cc4-51fe-45ff-b3e3-32110d42d3b7)
+
+输入包含两个单词时，Transformer的整体结构如下：
+![image](https://github.com/user-attachments/assets/c687eff0-5753-4c9f-a748-c143a3a0131d)
+
+#### （2）流程示例
+##### a. 获取输入句子的每个单词的向量表示x，x由单词的Embedding和单词位置的Embedding相加得到：  
+![image](https://github.com/user-attachments/assets/5365e1e7-0ed8-49ee-82e8-a52270668044)
+##### b. 单词向量矩阵传入Encoder模块，经过N个后得到句子所有单词的编码信息矩阵C：  
+![image](https://github.com/user-attachments/assets/7b1c759e-aa86-4beb-949c-06bc28e77833)  
+##### c. Encoder输出的编码信息矩阵C传递到Decoder中，Decoder会根据当前翻译过的词汇 1~i 翻译下一个单词 i+1 ：  
+![image](https://github.com/user-attachments/assets/0dedc6d3-3510-4b4f-bf3a-fad605dda43f)  
+如上图所示，首个 Decoder 输入一个开始符 "<Begin>" ，预测第一个单词输出为 "I"；然后然后输入翻译开始符 "<Begin>" 和单词 "I"，预测第二个单词，输出为"am"，以此类推。
+
+#### （3）输入表示
+Transformer中单词的输入表示由**单词Embedding**和**位置Embedding**相加得到。  
+![image](https://github.com/user-attachments/assets/cad5a526-4aee-4991-b140-d215badf65d9)  
+##### a. 单词Embedding
+可由Word2vec等模型预训练得到，可以在Transformer中加入Embedding层。
+##### b. 位置Embedding
+Transformer 中除了单词的Embedding，还需要使用位置Embedding 表示单词出现在句子中的位置。**因为 Transformer不采用RNN结构，而是使用全局信息，不能利用单词的顺序信息，而这部分信息对于NLP来说非常重要。**（这句话不太明白？）所以Transformer中使用位置Embedding保存单词在序列中的相对或绝对位置。
+
+#### （3）Multi-Head Attention（多头注意力机制）
+![image](https://github.com/user-attachments/assets/ff9faba9-64fa-4029-8d4e-c63ddfcf180b)  
+由多个**Self-Attention**组成，结构如下：  
+![image](https://github.com/user-attachments/assets/f1c7dd0b-d54d-41d7-8587-10a7b91f6397)  
+
+##### a. Self-Attention结构
+![image](https://github.com/user-attachments/assets/f98d57f9-87cb-4b0a-aea1-da828ca40fe7)  
+上图是Self-Attention结构，最下面是 Q (查询)、K (键值)、V (值)矩阵，是通过输入矩阵 X 和权重矩阵 WQ, WK, WV相乘得到的。  
+![image](https://github.com/user-attachments/assets/a8bdd746-8570-4a10-ba70-cf86f869da0f)  
+得到Q、K、V之后就可以计算得出Self-Attention的输出，如下图所示：  
+![image](https://github.com/user-attachments/assets/4c6929ae-b9f2-411f-8970-07ffa9e4730a)
+
+##### b.Multi-Head Attention输出
+![image](https://github.com/user-attachments/assets/e0857866-6327-4922-b21c-5610a1313392)  
+Multi-Head Attention包含多个Self-Attention层，输入X传入h各不同的Self-Attention中，计算得到h个输出矩阵：  
+![image](https://github.com/user-attachments/assets/36b9acf3-9133-4c13-b203-e8401fc17fde)  
+得到h
+个输出矩阵Z1-Zh后，Multi-Atttention将他们拼接到一起得到 Multi-Head Attention最终的输出矩阵Z。
+
+#### （4）编码器Encoder结构
+![image](https://github.com/user-attachments/assets/355096fc-c7b4-42ca-b85a-c3663c0f9a0c)  
+上图中N表示Encoder的个数，其中还有 Add & Norm 和 Feed Forward模块：
+##### a. Add & Norm（残差连接和层归一化）：
+参考博客：https://blog.csdn.net/2401_85377976/article/details/141423008 。
+
+**Add（残差连接）**
+
+残差网络： 残差网络（ResNet）通过残差连接，使得输入信息可以直接跨越一层或多层，与后续层的输出相加，从而缓解了深层网络中的梯度消失和梯度爆炸问题，使得网络可以扩展到更深的层数。
+梯度消失：在深层网络中，梯度需要通过多个层次进行反向传播。根据链式法则，梯度在传播过程中会不断相乘，当层数较多时，梯度值可能会以指数形式衰减并趋近于零，导致梯度消失。  
+梯度爆炸：深层网络中的梯度在传播过程中也可能因链式法则的连乘效应而迅速增长，甚至呈指数级增长，导致网络参数更新过大，网络不稳定。
+
+**Norm（层归一化）**
+
+归一化（Normalization）： 一种数据预处理技术，旨在通过线性或非线性变换，将输入数据或神经网络层的输出数据映射到一个特定的数值范围或分布之中。这一处理过程对于提升神经网络训练过程的稳定性、加速收敛速度以及最终提高模型性能至关重要。  
+在神经网络中，常见的归一化方法包括 ：  
+批归一化（Batch Normalization）： 它通过在每个批次中对输入数据进行规范化，使其均值为0、方差为1，从而加速网络的收敛过程，降低网络对初始化和学习率的敏感性，同时也有一定的正则化效果。  
+层归一化（Layer Normalization）： 与批归一化不同，它在每层中对所有样本的输出进行规范化，而不是对每个批次进行规范化。层归一化在处理序列数据等不适合批处理的情况下，可以作为替代方案使用。  
+组归一化（Group Normalization）： 组归一化是一种介于批归一化和层归一化之间的方法，它将输入数据分成多个小组，然后对每个小组内的样本进行归一化，从而减小小组之间的相关性，提高网络的学习能力。
+
+##### b. Feed Forward：
+
+
+#### （5）解码器Decoder结构
+![image](https://github.com/user-attachments/assets/e2ba47fc-7b85-44a3-a318-f8a55050ad9a)  
+##### a. 第一个Multi-Head Attention
+前面已经说过，Decoder的时候，需要根据之前翻译的单词，预测当前最有可能翻译的单词，那么此时就需要**Decoder在预测第 i 个输出的时候，需要将第 i+1 之后的单词掩盖住，Mask的作用正在于此：  
+![image](https://github.com/user-attachments/assets/00867131-cf1b-4875-81f0-a98d19e14b8a)  
+这样就得到一个Mask Self-Attention的输出矩阵Zi，然后和Encoder类似，通过Multi-Head Attention拼接多个输出Zi然后计算得到第一个Multi-Head Attention的输出Z，其维度与输入 X 的一样。
+
+##### b. 第二个Multi-Head Attention
+Decoder的第二个Multi-Head Attention变化不大， 主要的区别在于其中Self-Attention的 K, V 矩阵不是使用上一个Multi-Head Attention的输出，而是使用Encoder的编码信息矩阵 C 计算的。根据Encoder的输出 C 计算得到 K, V ，根据上一个Multi-Head Attention的输出 Z 计算 Q。
+
+#### （6）Linear & Softmax
+待深入研究。。。  
+![image](https://github.com/user-attachments/assets/541f9d67-8d24-4493-8a32-9aa6496cbefb)  
+Output如图中所示，首先经过一次线性变换（线性变换层是一个简单的全连接神经网络，它可以把解码组件产生的向量投射到一个比它大得多的，被称为对数几率的向量里），然后Softmax得到输出的概率分布（softmax层会把向量变成概率），然后通过词典，输出概率最大的对应的单词作为我们的预测输出。
+
+### 2. BERT 与 Sentence-BERT
+参考博客：https://blog.csdn.net/star_nwe/article/details/143227601 和 https://blog.51cto.com/u_16163510/12673828 。  
+**BERT（Bidirectional Encoder Representations from Transformers**是由 Google 于2018年提出的一种预训练语言模型。其核心特点有：  
+#### a. 双向上下文编码
+BERT 利用 Transformer 结构的自注意力机制对文本进行双向编码，这意味着在生成每个词的表示时，会同时考虑该词左右两侧的上下文信息，从而捕捉更丰富的语义。  
+#### b. 预训练任务
+**Masked Language Model (MLM)**：在输入文本中随机遮蔽一些词，然后让模型预测被遮蔽词的原始值，从而让模型学习上下文关联。
+**Next Sentence Prediction (NSP)**：训练模型判断两个句子是否连续，这有助于理解句子间的关系。
+
+**不过，BERT 的输出是针对每个词的上下文嵌入，对于直接计算句子间相似度时，需要额外的处理（比如取 [CLS] 表示或平均池化）来获得句子级向量；而这种方式在语义相似度计算上可能并不是最优的。**
+
+### 3. Sentence-BERT模型
+Sentence‑BERT（SBERT） 是对原始 BERT 模型的一种改进，主要目的是生成高质量的句子级嵌入。其主要特点包括：  
+#### a. 专为句子嵌入设计
+SBERT 在 BERT 的基础上添加了 siamese 网络结构或 triplet 网络，通过微调使模型能够直接输出语义上聚合的句子向量。这使得生成的句子向量在比较相似度、检索任务等方面表现更好。  
+#### b. 高效计算相似度
+由于 SBERT 生成的是固定维度的句子级向量，可以直接用余弦相似度或欧氏距离来度量句子之间的语义相似性，不需要复杂的后处理。  
+#### c. 广泛应用于语义搜索和聚类
+SBERT 常用于文本相似度计算、语义搜索、聚类等任务，可以在大规模语料中快速检索出语义相似的句子。
+
+***在WikiLex-Searcher中就使用了 Sentence-BERT 模型将文本数据转换为语义向量，进而实现了高效的语义搜索。***
+
+## 五. 文本相似性度量
+有很多比如说欧式距离、余弦相似度、Jacard相似度等。WikiLex-Searcher中使用余弦相似度来确定语义相似程度。  
+**注意**：HNSWLib中好像并没有直接计算余弦相似度的，但是我们使用的文本向量都是经过归一化后的，所以直接可以利用内积来计算余弦相似度。
+
+## 六. 搜索设计
+源代码主要在src/lemsearcher.hpp中。  
+### (1)查询预处理与向量化
+当用户提交查询时，系统会：使用分词工具 jieba 对查询文本进行分词，从而提取出查询关键词；同时将整个查询文本输入 Sentence‑BERT生成查询向量。
+
+### (2) 倒排搜索
+根据查询关键词，在倒排索引中查找对应的词条，并根据关键词权重计算每个词条的倒排得分。该过程侧重于文本匹配，能捕捉用户输入与词条中显式出现的词语之间的联系。
+
+### (3) 向量搜索
+利用 HNSWlib 的向量索引，根据查询向量寻找语义上最相似的词条。该方法可以发现即使文本表述不同，但语义相近的词条，从而提升搜索的智能性。
+
+### (4) 搜索结果融合
+将倒排搜索和向量搜索得到的结果进行融合。融合策略可以采用并集、加权平均等方式，将两个渠道的得分合并，得到一个综合得分，进而对结果排序并返回。这样既兼顾了关键词匹配的精度，又利用了语义向量搜索的鲁棒性。
+
+## 七. 服务接口
+使用 cpp-httplib 构建 C++ 服务端。
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
