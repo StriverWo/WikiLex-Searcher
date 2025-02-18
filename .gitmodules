@@ -1,0 +1,11 @@
+[submodule "lib/cppjieba"]
+    path = lib/cppjieba
+    url = https://github.com/yanyiwu/cppjieba.git
+
+[submodule "lib/hnswlib"]
+    path = lib/hnswlib
+    url = https://github.com/nmslib/hnswlib.git
+
+[submodule "lib/cpp-httplib"]
+    path = lib/cpp-httplib
+    url = https://github.com/yhirose/cpp-httplib.git
