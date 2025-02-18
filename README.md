@@ -1,5 +1,21 @@
 # WikiLex-Searcher
 
+## 构建和编译
+```Bash
+cd WikiLex-Searcher
+mkdir build && cd build
+cmake ..
+make
+```
+## 运行前准备
+请先阅读后续的步骤，完整数据预处理和相关库安装后再执行。
+## 测试和运行
+编译后会自动在build目录下生成可执行文件，在build下执行下述命令即可建立搜素引擎服务端：
+```Bash
+./lemserver
+```
+这样服务端就建立了，打开浏览器输入：127.0.0.1:8080 即可连接该搜索引擎。  
+此外经过构建编译后，还会在build下生成系列有关数据预处理和测试的程序，这些源代码都可以在scr目录下找到。
 
 ## 一. 数据预处理
 ### 1. 数据准备
@@ -7,11 +23,11 @@
 下载网址：https://www.wikidata.org/wiki/Wikidata:Database_download/zh 。
 我下载的是wikidata-20250101-lexemes.json.gz，然后将其放入data目录下，进行解压： 
 
-```
+```Bash
 gunzip wikidata-20250101-lexemes.json.gz
 ```
 如果是以.tar.gz或者.tar.tgz结尾的压缩文件，可以通过tar命令解压：
-```
+```Bash
 tar -xzvf xxx.tar.gz
 ```
 这样在data目录下将生成原始的Wikidata语料库，名为wikidata-20250101-lexemes.json。它是一个JSON格式的文件，每一行代表一个JSON对象，解析时可以逐行读取。  
@@ -25,7 +41,7 @@ Wikidata原始的JSON的结构信息可以参见官网：https://doc.wikimedia.o
 
 ##### a. 打开原始物料文件，逐行读取JSON对象
 ##### b. 解析每个JSON对象，提取详细信息。这里需要预先安装jsoncpp：
-```
+```Bash
 sudo apt-get install -y libjsoncpp-dev
 ```
 ##### c. 保留英文的词条信息
@@ -34,7 +50,7 @@ sudo apt-get install -y libjsoncpp-dev
 前者用于前端访问时可以直接跳转，后者用于后续结合深度学习模型进行文本向量化以构建向量索引。  
 **这部分代码位于src/simplify_lexemes.cpp中**  
 构建并编译本项目后，可以直接调用相应的可执行文件来获得清洗简化后的JSON文件。执行后会在data目录下生成simplified_lexemes.json：
-```
+```Bash
 ./build/simplify_lexemes
 ```
 ### 2. 文本向量化
@@ -42,7 +58,7 @@ sudo apt-get install -y libjsoncpp-dev
 **本项目以sentence-Bert模型为例：**   
 下载方法有多种：
 a. 本项目中的 model/sentence-bert/ 路径下含有加载sentence-transformers/all-MiniLM-L6-v2模型的Python脚本文件： loadmodel.py。通过如下命令可以自动在该目录下下载该模型:
-```
+```Bash
 cd model/sentence-bert/
 python3 loadmodel.py    // 如果执行过程出错，根据提示信息pip install对应的包即可。
 ```
@@ -52,7 +68,7 @@ c. 如果该脚本始终无法执行（执行出错），可以直接从 https:/
 #### (2) 预先向量化
 鉴于实时向量化及其缓慢，本项目采用事先对简化后的JSON文件选择相应的combined_text字段进行向量化。 以此来为后续构建向量索引进行预备向量数据。  
 在该项目中在的 model/sentence-bert/ 路径下仍然提供对简化后的 simplified_lexemes.json 进行向量化的Python脚本：vectorize.py. 通过执行如下命令便可以在data目录下生成向量化后的文本文件lexeme_vectors.txt。  
-```
+```Bash
 cd model/sentence-bert/
 python3 vectorize.py    // 如果执行过程出错，根据提示信息pip install对应的包即可。
 ```
@@ -479,7 +495,7 @@ popen() 函数通过创建一个管道，调用 fork 产生一个子进程，执
     3. 关闭管道：通信结束后，父进程应该调用 pclose 函数来关闭文件流，同时等待子进程结束，并返回子进程的退出状态。
 
 如下部分代码就是本项目中在 C++ 代码中调用 python 脚本的方法:  
-```
+```cpp
 std::string exec_python_vectorize(const std::string& input_text) {
     // 构造调用命令，此处假设 python3 可执行文件在 PATH 中
     // 你可以将输入文本作为命令行参数传递，但要注意转义空格和特殊字符
@@ -518,7 +534,62 @@ std::string exec_python_vectorize(const std::string& input_text) {
 ## 七. 服务接口
 使用 cpp-httplib 构建 C++ 服务端。
 
+## 八. 热词 & 搜索记录 & 用户注册登录
+在本项目通过 Redis 保存热词和搜索的历史记录。  
+**需要预先安装 Redis 和 hiredis**（这里只是个示例安装步骤）：  
+```bash
+# 安装 Redis
+sudo apt update
+sudo apt install redis-server
+# 安装 hiredis（Redis C 客户端库）
+git clone https://github.com/redis/hiredis.git
+cd hiredis
+make
+sudo make install
+```
+这里可能会出现问题，在于使用 sudo make install 安装库文件后，需要更新动态链接器的缓存，让系统知道新库文件的位置：
+```bash
+sudo ldconfig
+```
+这样可以通过 hiredis 提供的相关接口去连接并使用 Redis。
 
+### 1. 热词统计
+
+统计搜索过程中对某个词条的搜索次数，将其作为score，然后与该词条信息一起组成 <score，Lex> 插入到 zset 中。  
+zset 是有序的根据 score 进行的排名，那么通过 ZREVRANGE 命令便可以从zset中得到指定区间的成员，通过成员分数从高到低。  
+
+底层使用 Redis 的 ZSet （有序集合）数据结构，在Redis中 zset 使用了两种不同的存储结构，分别是**ziplist（压缩列表）和skiplist（跳表），当zset 满足以下条件时使用压缩列表：
+* 成员的数量小于128个；
+* 每个member成员的字符串长度都小于64个字节。
+
+当不满足压缩列表保存数据时，就会使用 skipList 结构来存储数据。  
+**不论是使用跳表或者压缩列表，对于得到热词的这个场景，他们的搜索时间复杂度基本常熟级别的，因为他们都是有序的，而且热词一般是返回score最高的前面一些热词。**
+
+Redis 这里有关的内容参考了：https://www.cnblogs.com/wan-ming-zhu/p/18079378 和 https://blog.csdn.net/qq_36608921/article/details/105551601。
+
+#### (1) zipLists
+![image](https://github.com/user-attachments/assets/698bf8d1-6949-4791-af5b-08ca5cc7becb)  
+插入的时间复杂度是O(n)，但相比跳表节省空间。
+#### (2) skipLists
+插入时间复杂度是O(logn)，但相比压缩链表更占空间。
+
+### 2. 搜索记录统计
+本项目中每个用户在服务端拥有着不同的搜索记录，每个用户对应的搜索记录都使用Redis中的 List 数据结构进行存储。  
+![image](https://github.com/user-attachments/assets/8e653a7b-07ee-4aa1-83f2-c504ed643661)  
+![image](https://github.com/user-attachments/assets/2c15abcd-b136-442e-a831-da205ab84067)
+
+### 3. 用户注册登录
+提供用户注册登录功能，每个用户有自己的用户名和密码，在访问搜索引擎主页时需要事先登录，如果没有账号需要提前注册。
+
+底层使用的是 Redis 中的 Hash 结构来存储用户信息（username和password）。  
+Redis 6 中Hash内部有两种编码方式，Redis会根据实际情况自动选择合适的编码：  
+* ziplist:
+当 Hash 中的字段数量较少且每个字段和值的长度较短时，Redis 会使用 ziplist 作为内部编码。  
+* hashtable:
+ Hash 中的字段数量较多或者字段和值的长度较长时，Redis 会使用 hashtable 作为内部编码。  
+* 性能特点：  
+查找、插入和删除操作的时间复杂度：在使用 hashtable 编码时，Hash 的查找、插入和删除操作的平均时间复杂度为 ，这使得 Redis Hash 在处理大量数据时具有很高的性能。即使在使用 ziplist 编码时，对于小规模的数据，这些操作的性能也比较可观。  
+内存使用效率：由于 ziplist 的紧凑结构，当 Hash 数据较小时，使用 ziplist 编码可以显著节省内存空间。但随着数据量的增加，切换到 hashtable 编码可以保证操作的性能。
 
 
 
