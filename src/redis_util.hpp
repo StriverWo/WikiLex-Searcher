@@ -24,8 +24,13 @@ public:
     std::vector<std::pair<std::string, int>> getTopWordsSorted(int limit = 10);
 
     // 历史记录功能
-    bool logQuery(const std::string& query);
-    std::vector<std::string> getQueryHistory(int limit = 10);
+    bool logQuery(const std::string& username, const std::string& query);
+    std::vector<std::string> getQueryHistory(const std::string& username, int limit = 10);
+
+    // 用户登录/注册功能
+    bool registerUser(const std::string& username, const std::string& password);
+    bool loginUser(const std::string& username, const std::string& password);
+    bool isUserLoggedIn(const std::string& username);
 
 private:
     redisContext* context;
@@ -132,25 +137,27 @@ std::vector<std::pair<std::string, int>> RedisUtil::getTopWordsSorted(int limit)
 }
 
 
-bool RedisUtil::logQuery(const std::string& query) {
-    // 使用 LPUSH 将查询记录推入 "query_history" 列表中
-    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "LPUSH query_history %s", query.c_str()));
+bool RedisUtil::logQuery(const std::string& username, const std::string& query) {
+    std::string historyKey = "user:" + username + ":query_history";  // 用户唯一的历史记录键
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "LPUSH %s %s", historyKey.c_str(), query.c_str()));
     if (!reply) {
         std::cerr << "Redis LPUSH command error for query history!" << std::endl;
         return false;
     }
     freeReplyObject(reply);
-    // 限制列表长度为100（保留最近100条记录）
-    reply = static_cast<redisReply*>(redisCommand(context, "LTRIM query_history 0 99"));
+    
+    // 限制每个用户的查询记录为最多100条
+    reply = static_cast<redisReply*>(redisCommand(context, "LTRIM %s 0 99", historyKey.c_str()));
     if (reply) {
         freeReplyObject(reply);
     }
     return true;
 }
 
-std::vector<std::string> RedisUtil::getQueryHistory(int limit) {
+std::vector<std::string> RedisUtil::getQueryHistory(const std::string& username, int limit) {
+    std::string historyKey = "user:" + username + ":query_history";  // 用户唯一的历史记录键
     std::vector<std::string> history;
-    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "LRANGE query_history 0 %d", limit - 1));
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "LRANGE %s 0 %d", historyKey.c_str(), limit - 1));
     if (reply && reply->type == REDIS_REPLY_ARRAY) {
         for (size_t i = 0; i < reply->elements; i++) {
             history.push_back(reply->element[i]->str);
@@ -159,5 +166,47 @@ std::vector<std::string> RedisUtil::getQueryHistory(int limit) {
     freeReplyObject(reply);
     return history;
 }
+
+
+// 注册用户：存储用户名和密码（密码应加密）
+bool RedisUtil::registerUser(const std::string& username, const std::string& password) {
+    // 简单示范：存储为 Redis 哈希字段
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "HSET users %s %s", username.c_str(), password.c_str()));
+    if (reply == nullptr) {
+        std::cerr << "Redis HSET command error!" << std::endl;
+        return false;
+    }
+    freeReplyObject(reply);
+    return true;
+}
+
+// 用户登录：根据用户名检查密码
+bool RedisUtil::loginUser(const std::string& username, const std::string& password) {
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "HGET users %s", username.c_str()));
+    if (reply == nullptr) {
+        std::cerr << "Redis HGET command error!" << std::endl;
+        return false;
+    }
+    if (reply->type == REDIS_REPLY_STRING) {
+        std::string storedPassword(reply->str);
+        freeReplyObject(reply);
+        return storedPassword == password;  // 简单密码对比，实际应用中应使用哈希对比
+    }
+    freeReplyObject(reply);
+    return false;
+}
+
+// 检查用户是否已登录：存储在 Redis 的会话中
+bool RedisUtil::isUserLoggedIn(const std::string& username) {
+    redisReply* reply = static_cast<redisReply*>(redisCommand(context, "GET session:%s", username.c_str()));
+    if (reply == nullptr) {
+        std::cerr << "Redis GET command error!" << std::endl;
+        return false;
+    }
+    bool isLoggedIn = (reply->type == REDIS_REPLY_STRING);
+    freeReplyObject(reply);
+    return isLoggedIn;
+}
+
 
 #endif // REDIS_UTIL_HPP

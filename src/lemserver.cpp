@@ -63,6 +63,46 @@ int main() {
     httplib::Server svr;
     svr.set_base_dir(root_path.c_str());    // 访问首页
 
+     // 用户注册接口
+    svr.Post("/register", [&redis](const httplib::Request &req, httplib::Response &rsp) {
+        Json::Value requestBody;
+        Json::Reader reader;
+        if (!reader.parse(req.body, requestBody)) {
+            rsp.set_content("无效的请求数据", "text/plain");
+            return;
+        }
+
+        std::string username = requestBody["username"].asString();
+        std::string password = requestBody["password"].asString();
+
+        if (redis.registerUser(username, password)) {
+            rsp.set_content(R"({"success": true, "message": "注册成功"})", "application/json");
+        } else {
+            rsp.set_content(R"({"success": false, "message": "用户名已存在"})", "application/json");
+        }
+    });
+
+    // 用户登录接口
+    svr.Post("/login", [&redis](const httplib::Request &req, httplib::Response &rsp) {
+        Json::Value requestBody;
+        Json::Reader reader;
+        if (!reader.parse(req.body, requestBody)) {
+            rsp.set_content("无效的请求数据", "text/plain");
+            return;
+        }
+
+        std::string username = requestBody["username"].asString();
+        std::string password = requestBody["password"].asString();
+
+        if (redis.loginUser(username, password)) {
+            // 登录成功，设置会话
+            // redisCommand(redis.context, "SET session:%s logged_in", username.c_str());
+            rsp.set_content(R"({"success": true, "message": "登录成功"})", "application/json");
+        } else {
+            rsp.set_content(R"({"success": false, "message": "用户名或密码错误"})", "application/json");
+        }
+    });
+
     // 3.构建服务端应答响应
     svr.Get("/s", [&search, &redis](const httplib::Request &req, httplib::Response &rsp){
         // has_para：这个函数用来检测用户的请求中是否有搜索关键字
@@ -74,6 +114,21 @@ int main() {
         // 获取用户输入的关键词
         std::string text = req.get_param_value("search");
         std::cout << "用户在搜索：" << text << std::endl;
+
+        // 假设用户的用户名存储在请求的cookie或某个请求参数中（这里我们假设用户名是 "username"）
+        std::string username = req.get_param_value("username");  // 这里假设请求中包含了用户名参数
+
+        // 检查用户是否登录（此处略过详细的登录验证）
+        if (username.empty()) {
+            rsp.set_content("用户未登录", "text/plain; charset=utf-8");
+            return;
+        }
+
+        // 将搜索记录添加到 Redis 历史记录中
+        if (!redis.logQuery(username, text)) {
+            rsp.set_content("记录搜索历史失败！", "text/plain; charset=utf-8");
+            return;
+        }
 
         // 热词统计
         if(!redis.incrementWordCount(text)) {
@@ -123,7 +178,12 @@ int main() {
 
     // 历史记录接口：获取最近的搜索历史记录
     svr.Get("/history", [&redis](const httplib::Request &req, httplib::Response &rsp) {
-        auto history = redis.getQueryHistory(10);
+        if (!req.has_param("username")) {
+            rsp.set_content("缺少用户名参数", "text/plain");
+            return;
+        }
+        std::string username = req.get_param_value("username");
+        auto history = redis.getQueryHistory(username, 10);  // 获取指定用户的历史记录        
         Json::Value jsonResult;
         for (const auto &entry : history) {
             jsonResult.append(entry);
