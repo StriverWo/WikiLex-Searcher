@@ -20,8 +20,38 @@ include_directories(
 
 file(COPY ${CMAKE_SOURCE_DIR}/src/runlemdebug.py DESTINATION ${CMAKE_BINARY_DIR})
 
-# 添加链接库目录（根据实际情况调整）
-# link_directories(/usr/local/lib)
+# 查找 MySQL Connector/C++ 库的路径
+find_library(MYSQLCPPCONN_LIB NAMES mysqlcppconn PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib)
+if(NOT MYSQLCPPCONN_LIB)
+    message(FATAL_ERROR "MySQL Connector/C++ library not found.")
+else()
+    message(STATUS "Found MySQL Connector/C++ library: ${MYSQLCPPCONN_LIB}")
+    include_directories(/usr/include/mysql-cppconn)  # 包含 MySQL Connector 的头文件路径
+endif()
+
+# 查找 jsoncpp 库
+find_library(JSONCPP_LIB jsoncpp)
+if(NOT JSONCPP_LIB)
+    message(FATAL_ERROR "jsoncpp library not found.")
+else()
+    message(STATUS "Found jsoncpp library: ${JSONCPP_LIB}")
+endif()
+
+# 查找 pthread 库
+find_package(Threads REQUIRED)
+if(NOT Threads_FOUND)
+    message(FATAL_ERROR "pthread library not found.")
+else()
+    message(STATUS "Found pthread library")
+endif()
+
+# 查找 hiredis 库
+find_library(HIREDIS_LIB hiredis)
+if(NOT HIREDIS_LIB)
+    message(FATAL_ERROR "hiredis library not found.")
+else()
+    message(STATUS "Found hiredis library: ${HIREDIS_LIB}")
+endif()
 
 # LINUX系统下构建符号链接
 if(UNIX)
@@ -29,7 +59,7 @@ if(UNIX)
         COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/src ${CMAKE_BINARY_DIR}/src
         COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/data ${CMAKE_BINARY_DIR}/data
         COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/model ${CMAKE_BINARY_DIR}/model
-        COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/lemwwwroot ${CMAKE_BINARY_DIR}/lemwwwroot       
+        COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_SOURCE_DIR}/lemwwwroot ${CMAKE_BINARY_DIR}/lemwwwroot
         COMMENT "Creating symbolic links for 'src' and 'data' and 'model' directories in the build directory"
     )
 endif()
@@ -41,8 +71,12 @@ file(GLOB SRC_FILES ${CMAKE_SOURCE_DIR}/src/*.cpp)
 foreach(src_file ${SRC_FILES})
     get_filename_component(exe_name ${src_file} NAME_WE)
     add_executable(${exe_name} ${src_file})
-    # 链接 jsoncpp、pthread库（请根据实际情况调整库名称及顺序）
-    target_link_libraries(${exe_name} jsoncpp pthread hiredis)
+    # 链接找到的库
+    target_link_libraries(${exe_name} 
+        ${JSONCPP_LIB} 
+        ${CMAKE_THREAD_LIBS_INIT} 
+        ${HIREDIS_LIB} 
+        ${MYSQLCPPCONN_LIB} 
+        stdc++   # 确保链接 C++ 标准库
+    )
 endforeach()
-
-# 如果你需要单独设置某个目标的编译选项，也可以使用 target_compile_options() 命令

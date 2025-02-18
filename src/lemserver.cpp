@@ -1,6 +1,8 @@
 #include "cpp-httplib/httplib.h"
 #include "lemsearcher.hpp"
 #include "redis_util.hpp"
+#include "mysql_util.hpp"
+
 
 const std::string input = "./data/simplified_lexemes.json";    
 const std::string vector_input = "./data/lexeme_vectors.txt";    
@@ -51,10 +53,19 @@ std::vector<float> ParseEmbeddingString(const std::string &embedding_str) {
 
 
 int main() {
+    // 初始化 MySQL 客户端
+    // 使用 tcp://127.0.0.1:3306，连接本地 MySQL ，user name为users，密码为“FangFang123!"" 数据库名为 wikilex
+    // 传入用户名和用户密码
+    MysqlUtil mysql("tcp://127.0.0.1:3306", "users", "FangFang123!\"", "wikilex");
+    if (!mysql.connect()) {
+        std::cerr << "MySQL 连接失败" << std::endl;
+        return -1;
+    }
+
     // 初始化 Redis 客户端
     RedisUtil redis;
     redis.connect();
-    
+
     // 1. 初始化，构建搜索索引
     ns_searcher::Searcher *search = new ns_searcher::Searcher();    
     search->InitSearcher(input,vector_input);  //初始化search，创建单例，并构建索引  
@@ -64,7 +75,7 @@ int main() {
     svr.set_base_dir(root_path.c_str());    // 访问首页
 
      // 用户注册接口
-    svr.Post("/register", [&redis](const httplib::Request &req, httplib::Response &rsp) {
+    svr.Post("/register", [&redis,&mysql](const httplib::Request &req, httplib::Response &rsp) {
         Json::Value requestBody;
         Json::Reader reader;
         if (!reader.parse(req.body, requestBody)) {
@@ -75,15 +86,20 @@ int main() {
         std::string username = requestBody["username"].asString();
         std::string password = requestBody["password"].asString();
 
-        if (redis.registerUser(username, password)) {
-            rsp.set_content(R"({"success": true, "message": "注册成功"})", "application/json");
-        } else {
-            rsp.set_content(R"({"success": false, "message": "用户名已存在"})", "application/json");
+        // 为了简单，这里直接使用明文作为密码哈希，实际上应进行安全性哈希处理
+        std::string password_hash = password;
+
+        if (!mysql.registerUser(username, password_hash)) {
+            rsp.set_content(R"({"success": false, "message": "用户名已存在或注册失败"})", "application/json");
+            return;
         }
+        // 可选：将新注册用户的信息写入 Redis 缓存
+        redis.registerUser(username, password); // 如有相应实现
+        rsp.set_content(R"({"success": true, "message": "注册成功"})", "application/json");
     });
 
     // 用户登录接口
-    svr.Post("/login", [&redis](const httplib::Request &req, httplib::Response &rsp) {
+    svr.Post("/login", [&redis,&mysql](const httplib::Request &req, httplib::Response &rsp) {
         Json::Value requestBody;
         Json::Reader reader;
         if (!reader.parse(req.body, requestBody)) {
@@ -93,14 +109,24 @@ int main() {
 
         std::string username = requestBody["username"].asString();
         std::string password = requestBody["password"].asString();
+        // 这里同样简单的将密码作为明文
+        std::string password_hash = password;
 
-        if (redis.loginUser(username, password)) {
-            // 登录成功，设置会话
-            // redisCommand(redis.context, "SET session:%s logged_in", username.c_str());
+        if (mysql.loginUser(username, password_hash)) {
+            // 登录成功后，可在 Redis 中更新用户会话信息（例如设置一个 session key）
+            // redis.setSession(username, "logged_in");
             rsp.set_content(R"({"success": true, "message": "登录成功"})", "application/json");
         } else {
             rsp.set_content(R"({"success": false, "message": "用户名或密码错误"})", "application/json");
         }
+        // 将下面的原来的代码删掉，直接从mysql中更为准确的验证登录能否成功
+        // if (redis.loginUser(username, password)) {
+        //     // 登录成功，设置会话
+        //     // redisCommand(redis.context, "SET session:%s logged_in", username.c_str());
+        //     rsp.set_content(R"({"success": true, "message": "登录成功"})", "application/json");
+        // } else {
+        //     rsp.set_content(R"({"success": false, "message": "用户名或密码错误"})", "application/json");
+        // }
     });
 
     // 3.构建服务端应答响应
@@ -137,6 +163,7 @@ int main() {
             return;
         }
 
+        // 使用python脚本对文本进行向量化
         std::vector<float> embedding_vector;
         try {
             std::string embedding_str = exec_python_vectorize(text);
@@ -151,18 +178,15 @@ int main() {
         search->SearchCombined(text,embedding_vector,&json_results);
 
         rsp.set_content(json_results,"application/json");
-
         std::cout << "用户搜索成功，结果已返回！" << std::endl;
     });
     
     // 增加接口用来获取热词
     svr.Get("/top-words", [&redis](const httplib::Request &req, httplib::Response &rsp) {
         auto topWords = redis.getTopWords();
-        
         Json::Value jsonResult; // 使用 jsoncpp 的 Json::Value 来构造 JSON 数据
         
         for (size_t i = 0; i < topWords.size(); ++i) {
-        
             Json::Value wordObj;
             wordObj["rank"] = static_cast<int>(i + 1);
             wordObj["word"] = topWords[i];
@@ -172,7 +196,6 @@ int main() {
         // 将 jsonResult 转换为字符串并设置响应内容
         Json::StreamWriterBuilder writer;
         std::string jsonString = Json::writeString(writer, jsonResult);
-        
         rsp.set_content(jsonString, "application/json");
     });
 
