@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -O0 -g CMakeFiles/simplify_lexemes.dir/src/simplify_lexemes.cpp.o -o simplify_lexemes  -ljsoncpp -lpthread -lhiredis

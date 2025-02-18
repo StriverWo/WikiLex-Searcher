@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -O0 -g CMakeFiles/lemserver.dir/src/lemserver.cpp.o -o lemserver  -ljsoncpp -lpthread -lhiredis

@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -O0 -g CMakeFiles/lemvectorize.dir/src/lemvectorize.cpp.o -o lemvectorize  -ljsoncpp -lpthread -lhiredis

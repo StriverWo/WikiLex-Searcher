@@ -16,6 +16,7 @@
       padding-top: 70px;
       min-height: 100vh;
     }
+
     .search-container {
       max-width: 700px;
       margin: 0 auto;
@@ -25,26 +26,31 @@
       border-radius: 15px;
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
     }
+
     .search-container h1 {
       font-size: 3rem;
       color: #343a40;
       margin-bottom: 30px;
     }
+
     .input-group {
       border-radius: 50px;
       overflow: hidden;
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
       margin-bottom: 20px;
     }
+
     .input-group .form-control {
       border: none;
       padding: 15px 20px;
       font-size: 1.2rem;
     }
+
     .input-group .form-control:focus {
       outline: none;
       box-shadow: none;
     }
+
     .input-group .btn {
       border: none;
       background-color: #007bff;
@@ -53,13 +59,16 @@
       font-size: 1.2rem;
       transition: background-color 0.3s ease, transform 0.2s ease;
     }
+
     .input-group .btn:hover {
       background-color: #0056b3;
       transform: scale(1.03);
     }
+
     .button-container {
       margin-top: 20px;
     }
+
     .btn-top-words {
       border: none;
       background-color: #28a745;
@@ -69,10 +78,12 @@
       border-radius: 50px;
       transition: background-color 0.3s ease, transform 0.2s ease;
     }
+
     .btn-top-words:hover {
       background-color: #218838;
       transform: scale(1.03);
     }
+
     .result-card {
       margin-bottom: 20px;
       border: none;
@@ -82,59 +93,72 @@
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
       transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
+
     .result-card:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
     }
+
     .result-card .card-body {
       padding: 20px;
     }
+
     .result-card .card-title {
       color: #007bff;
       font-size: 1.6rem;
       margin-bottom: 10px;
     }
+
     .result-card .card-text {
       font-size: 1rem;
       color: #555;
       margin-bottom: 10px;
     }
+
     .result-card .btn {
       font-size: 1rem;
     }
+
     .loading-container {
       display: flex;
       justify-content: center;
       align-items: center;
       padding: 40px;
     }
+
     .top-words-container {
       margin-top: 30px;
       background-color: #f8f9fa;
       padding: 20px;
       border-radius: 10px;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
     }
+
     .top-words-container h3 {
       margin-bottom: 15px;
     }
+
     .top-words-list {
       list-style-type: none;
       padding: 0;
     }
+
     .top-words-list li {
       font-size: 1.2rem;
       margin-bottom: 10px;
       padding: 5px 10px;
       background-color: #ffffff;
       border-radius: 5px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      cursor: pointer;
     }
+
     .top-words-list li span.rank {
       font-weight: bold;
       margin-right: 10px;
       color: #007bff;
     }
+
     /* 搜索历史记录样式 */
     .history-container {
       margin-top: 30px;
@@ -143,13 +167,16 @@
       border-radius: 10px;
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     }
+
     .history-container h3 {
       margin-bottom: 15px;
     }
+
     .history-list {
       list-style-type: none;
       padding: 0;
     }
+
     .history-list li {
       font-size: 1.1rem;
       margin-bottom: 8px;
@@ -159,6 +186,7 @@
       cursor: pointer;
       transition: background-color 0.2s ease;
     }
+
     .history-list li:hover {
       background-color: #ced4da;
     }
@@ -312,10 +340,18 @@
           let html = "<h3 class='mt-4 mb-3'>热词排行榜</h3>";
           html += '<ul class="top-words-list">';
           jsonData.forEach(function (item) {
-            html += '<li><span class="rank">' + item.rank + '.</span>' + item.word + '</li>';
+            html += `<li><span class="rank">${item.rank}.</span><span class="word">${item.word}</span></li>`;
           });
           html += '</ul>';
           $("#topWordsContainer").html(html);
+
+          // 为热词添加点击事件监听器
+          $(".top-words-list .word").on("click", function () {
+            let query = $(this).text();
+            $("#searchQuery").val(query);
+            saveHistory(query);
+            $("#searchButton").click();
+          });
         }).fail(function (jqXHR, textStatus, errorThrown) {
           console.error("请求失败:", textStatus, errorThrown);
           $("#topWordsContainer").html("<p>热词请求失败，请重试！</p>");

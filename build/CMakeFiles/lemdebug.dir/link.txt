@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -O0 -g CMakeFiles/lemdebug.dir/src/lemdebug.cpp.o -o lemdebug  -ljsoncpp -lpthread -lhiredis

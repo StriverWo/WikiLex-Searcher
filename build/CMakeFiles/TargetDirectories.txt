@@ -1,0 +1,7 @@
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/create_symlinks.dir
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/lemdebug.dir
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/lemserver.dir
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/lemvectorize.dir
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/simplify_lexemes.dir
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/edit_cache.dir
+/home/fangfang/cpp/WikiLex_Searcher/WikiLex-Searcher/build/CMakeFiles/rebuild_cache.dir
