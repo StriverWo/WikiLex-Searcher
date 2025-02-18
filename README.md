@@ -451,7 +451,7 @@ Decoder的第二个Multi-Head Attention变化不大， 主要的区别在于其�
 ![image](https://github.com/user-attachments/assets/541f9d67-8d24-4493-8a32-9aa6496cbefb)  
 Output如图中所示，首先经过一次线性变换（线性变换层是一个简单的全连接神经网络，它可以把解码组件产生的向量投射到一个比它大得多的，被称为对数几率的向量里），然后Softmax得到输出的概率分布（softmax层会把向量变成概率），然后通过词典，输出概率最大的对应的单词作为我们的预测输出。
 
-### 2. BERT 与 Sentence-BERT
+### 2. BERT模型
 参考博客：https://blog.csdn.net/star_nwe/article/details/143227601 和 https://blog.51cto.com/u_16163510/12673828 。  
 **BERT（Bidirectional Encoder Representations from Transformers**是由 Google 于2018年提出的一种预训练语言模型。其核心特点有：  
 #### a. 双向上下文编码
@@ -591,7 +591,89 @@ Redis 6 中Hash内部有两种编码方式，Redis会根据实际情况自动选
 查找、插入和删除操作的时间复杂度：在使用 hashtable 编码时，Hash 的查找、插入和删除操作的平均时间复杂度为 ，这使得 Redis Hash 在处理大量数据时具有很高的性能。即使在使用 ziplist 编码时，对于小规模的数据，这些操作的性能也比较可观。  
 内存使用效率：由于 ziplist 的紧凑结构，当 Hash 数据较小时，使用 ziplist 编码可以显著节省内存空间。但随着数据量的增加，切换到 hashtable 编码可以保证操作的性能。
 
+##九. 集成 MySQL 与布隆过滤机制
+首先需要事先安装MySQL，和 MySQL C++ 连接器。  
+MySQL 的安装这里省略。  
+Ubuntu 上MySQL 连接器的安装，执行：
+```bash
+sudo apt install libmysqlclient-dev
+```
+或者我的项目中安装 MySQL Connectot/C++
+```bash
+sudo apt install libmysqlcppconn-dev
+```
 
+* 在C++中使用MySQL示例：
+```cpp
+#include <iostream>
+#include <mysql/mysql.h>
+
+int main() {
+    MYSQL *conn;
+    conn = mysql_init(NULL);
+
+    if (!mysql_real_connect(conn, "localhost", "myuser", "mypassword", "mydb", 0, NULL, 0)) {
+        std::cerr << "MySQL Connection Failed: " << mysql_error(conn) << std::endl;
+        return 1;
+    }
+
+    std::cout << "Connected to MySQL successfully!" << std::endl;
+    mysql_close(conn);
+    return 0;
+}
+```
+
+本项目中，服务器端运行前需要事先在 MySQL 中创建一个用户名为user、密码为 FangFang123! 的用户，同时在此用户中，创建一个名为 wikilex 的数据库，如果需要自定义名字，则需要在 src/lemserver.cpp 中更改初始化mysql的一行代码，如下所示：
+```cpp
+MysqlUtil mysql("tcp://127.0.0.1:3306", "users", "FangFang", "wikilex");
+```
+下面是如何在 MySQL 中中创建一个名为 wikilex 的数据库的具体操作：
+* 登录 MySQL
+```Bash
+mysql -u root -p
+```
+* 创建名为wikilex的数据库：
+```sql
+CREATE DATABASE wikilex;
+```
+* 创建用户名为：users， 密码为：'FangFang123!' 的用户，其中的 'localhost'表示用户只能从本地连接连接到Mysql服务器：
+```sql
+CREATE USER 'users'@'localhost' IDENTIFIED BY 'FangFang';
+```
+* 如果希望该用户可以从任何主机连接，可以将 'localhost' 替换为 '%'：
+```sql
+CREATE USER 'users'@'%' IDENTIFIED BY 'FangFang123!';
+```
+* 授予users用户对wikilex数据库的所有权限：
+```sql
+GRANT ALL PRIVILEGES ON wikilex.* TO 'users'@'localhost';
+```
+或者：
+```sql
+GRANT ALL PRIVILEGES ON wikilex.* TO 'users'@'%';
+```
+* 刷新权限：
+```sql
+FLUSH PRIVILEGES;
+```
+* 退出MySQL：完成上述操作后，便可以使用下述命令退出MySQL命令行了：
+```sql
+EXIT;
+```
+* 最后，检查是否创建成功：
+```Bash
+sudo mysql -u users -p -D wikilex
+```
+在输入密码 FangFang123! 之后进入到 wikilex 数据库中，说明用户创建和权限授予都成功。
+
+### 1. 注册时用户信息持久化到 MySQL 中：
+
+***注册新用户时同步该用户信息到 MySQL 中，并缓存到 Redis 中，并在 Redis 缓存中设置该用户信息过期时间***
+
+### 2. 登录时用户信息首先从：
+原先设计登录时是从redis中匹配用户信息密码，然后根据匹配结果来确定登录是否成功。**但是，对于用户信息而言这是很重要的信息，不容有失，所以最好的办法是以 MySQL 中数据为准，所以在登录时需要从 MySQL 中匹配用户信息。  
+那么如果有不法分子拿着未知账号持续登录，那么很容易造成 MySQL 崩溃。  
+有什么好的办法呢？ **布隆过滤器！！！**
 
 
 
