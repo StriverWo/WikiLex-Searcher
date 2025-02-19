@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include "bloomfilter.hpp"
 
 class MysqlUtil {
 public:
@@ -26,8 +27,11 @@ public:
     bool registerUser(const std::string& username, const std::string& password_hash);
     // 根据用户名查询用户记录，对比密码是否一致
     bool loginUser(const std::string& username, const std::string& password_hash);
+    bool usernameExists(const::std::string& username);
     
-    
+    // 初始化布隆过滤器
+    bool loadUsernamesForBloomFilter(BloomFilter &bloomFilter);
+
     bool logQuery(int user_id, const std::string& query);
     std::vector<std::string> getUserHistory(int user_id, int limit);
     // ...其他接口
@@ -49,6 +53,32 @@ MysqlUtil::MysqlUtil(const std::string& host, const std::string& user,
 
 MysqlUtil::~MysqlUtil() {
     // unique_ptr 自动释放连接资源
+}
+
+
+bool MysqlUtil::loadUsernamesForBloomFilter(BloomFilter &bloomFilter) {
+    // 如果没有连接
+    if(!isConnected) {
+        std::cerr << "数据库未连接" <<std::endl;
+        return false;
+    }
+    
+    try {
+        // 创建一个 Statement 对象
+        std::unique_ptr<sql::Statement> stmt(conn->createStatement());
+        // 执行查询，获取所有用户名
+        std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT username FROM users"));
+        while (res->next()) {
+            std::string username = res->getString("username");
+            // 将用户名加入 BloomFilter
+            bloomFilter.add(username);
+        }
+    } catch (sql::SQLException &e) {
+        std::cerr << "SQL Exception in loadUsernamesForBloomFilter: " << e.what() << std::endl;
+        return false;
+    }
+    
+    return true;
 }
 
 bool MysqlUtil::connect() {
@@ -126,6 +156,32 @@ bool MysqlUtil::registerUser(const std::string& username, const std::string& pas
         }
     }
 }
+
+
+bool MysqlUtil::usernameExists(const std::string &username) {
+    // 如果没有连接
+    if(!isConnected) {
+        std::cerr << "数据库未连接" <<std::endl;
+        return false;
+    }
+    try {
+        // 预编译 SQL 语句，查询 users 表中指定用户名的记录数
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            conn->prepareStatement("SELECT COUNT(*) AS count FROM users WHERE username = ?"));
+        pstmt->setString(1, username);
+        std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+        if (res->next()) {
+            int count = res->getInt("count");
+            return (count > 0);
+        }
+    } catch (sql::SQLException &e) {
+        std::cerr << "SQL Exception in usernameExists: " << e.what() << std::endl;
+        return false;
+    }
+    return false;
+}
+
+
 
 bool MysqlUtil::loginUser(const std::string& username, const std::string& password_hash) {
     try {

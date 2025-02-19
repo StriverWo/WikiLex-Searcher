@@ -3,7 +3,6 @@
 #include "redis_util.hpp"
 #include "mysql_util.hpp"
 
-
 const std::string input = "./data/simplified_lexemes.json";    
 const std::string vector_input = "./data/lexeme_vectors.txt";    
 const std::string root_path = "./lemwwwroot";    
@@ -66,6 +65,10 @@ int main() {
     RedisUtil redis;
     redis.connect();
 
+    // 初始化布隆过滤器并从数据库中加载username构建布隆过滤器
+    BloomFilter bloomFilter(1000000, 7);  // 位数组大小为1000000，7个哈希函数
+    mysql.loadUsernamesForBloomFilter(bloomFilter);
+
     // 1. 初始化，构建搜索索引
     ns_searcher::Searcher *search = new ns_searcher::Searcher();    
     search->InitSearcher(input,vector_input);  //初始化search，创建单例，并构建索引  
@@ -74,8 +77,8 @@ int main() {
     httplib::Server svr;
     svr.set_base_dir(root_path.c_str());    // 访问首页
 
-     // 用户注册接口
-    svr.Post("/register", [&redis,&mysql](const httplib::Request &req, httplib::Response &rsp) {
+    // 用户注册接口
+    svr.Post("/register", [&redis,&mysql, &bloomFilter](const httplib::Request &req, httplib::Response &rsp) {
         Json::Value requestBody;
         Json::Reader reader;
         if (!reader.parse(req.body, requestBody)) {
@@ -89,17 +92,33 @@ int main() {
         // 为了简单，这里直接使用明文作为密码哈希，实际上应进行安全性哈希处理
         std::string password_hash = password;
 
+        // 使用布隆过滤器进行过滤，避免所有的注册请求都去数据库中查找是否存在该用户名
+        // 但好像注册时布隆过滤器的用处不大，因为判断存在时也可能是假的，还需去数据库中查询
+        // 使用布隆过滤器预先判断用户名是否可能存在
+        if (bloomFilter.contains(username)) {
+            // 布隆过滤器返回包含，可能存在，也可能是假阳性，
+            // 此时必须进一步查询数据库来确认
+            if (mysql.usernameExists(username)) {
+                rsp.set_content(R"({"success": false, "message": "用户名已存在"})", "application/json");
+                return;
+            }
+        }
+
         if (!mysql.registerUser(username, password_hash)) {
             rsp.set_content(R"({"success": false, "message": "用户名已存在或注册失败"})", "application/json");
             return;
         }
+
+        //注册成功后，更新布隆过滤器
+        bloomFilter.add(username);
+
         // 可选：将新注册用户的信息写入 Redis 缓存
         redis.registerUser(username, password); // 如有相应实现
         rsp.set_content(R"({"success": true, "message": "注册成功"})", "application/json");
     });
 
     // 用户登录接口
-    svr.Post("/login", [&redis,&mysql](const httplib::Request &req, httplib::Response &rsp) {
+    svr.Post("/login", [&redis,&mysql,&bloomFilter](const httplib::Request &req, httplib::Response &rsp) {
         Json::Value requestBody;
         Json::Reader reader;
         if (!reader.parse(req.body, requestBody)) {
@@ -111,6 +130,12 @@ int main() {
         std::string password = requestBody["password"].asString();
         // 这里同样简单的将密码作为明文
         std::string password_hash = password;
+
+        // 使用布隆过滤器判断用户名是否可能存在
+        if (!bloomFilter.contains(username)) {
+            rsp.set_content(R"({"success": false, "message": "用户名或密码错误"})", "application/json");
+            return;
+        }
 
         if (mysql.loginUser(username, password_hash)) {
             // 登录成功后，可在 Redis 中更新用户会话信息（例如设置一个 session key）
