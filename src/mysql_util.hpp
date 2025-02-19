@@ -16,7 +16,12 @@ class MysqlUtil {
 public:
     MysqlUtil(const std::string& host, const std::string& user, const std::string& password, const std::string& db);
     ~MysqlUtil();
+
+    // 链接数据库
     bool connect();
+    
+    // 在名为 db（此处就是"wikilex"）的数据库中建立保存用户信息的users表
+    bool createUsersTable();
     // 注册用户信息至users表中
     bool registerUser(const std::string& username, const std::string& password_hash);
     // 根据用户名查询用户记录，对比密码是否一致
@@ -34,12 +39,13 @@ private:
     std::string db;
     sql::Driver* driver;
     std::unique_ptr<sql::Connection> conn;
+    bool isConnected;
 };
 
 
 MysqlUtil::MysqlUtil(const std::string& host, const std::string& user,
                      const std::string& password, const std::string& db)
-    : host(host), user(user), password(password), db(db), driver(nullptr) {}
+    : host(host), user(user), password(password), db(db), driver(nullptr), isConnected(false) {}
 
 MysqlUtil::~MysqlUtil() {
     // unique_ptr 自动释放连接资源
@@ -48,16 +54,46 @@ MysqlUtil::~MysqlUtil() {
 bool MysqlUtil::connect() {
     try {
         driver = get_driver_instance();
+        if(!driver) {
+            std::cerr << "无法获取 MySQL 驱动实例" << std::endl;
+        }
         conn.reset(driver->connect(host, user, password));
         conn->setSchema(db);
+        isConnected = true;
         return true;
     } catch (sql::SQLException &e) {
         std::cerr << "MySQL连接错误: " << e.what() << std::endl;
+        isConnected = false;
         return false;
     }
 }
 
+bool MysqlUtil::createUsersTable() {
+    if(!isConnected) {
+        std::cerr << "数据库未连接" <<std::endl;
+        return false;
+    }
+    try {
+        std::unique_ptr<sql::Statement> stmt(conn->createStatement());
+        std::string createTableQuery = "CREATE TABLE IF NOT EXISTS users ("
+                                        "id INT AUTO_INCREMENT PRIMARY KEY,"
+                                        "username VARCHAR(255) NOT NULL UNIQUE,"
+                                        "password_hash VARCHAR(255) NOT NULL"
+                                        ")";
+        stmt->execute(createTableQuery);
+        return true;
+    } catch (sql::SQLException &e) {
+        std::cerr << "创建 users 表失败: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+
 bool MysqlUtil::registerUser(const std::string& username, const std::string& password_hash) {
+    if(!isConnected) {
+        std::cerr << "数据库未连接" <<std::endl;
+        return false;
+    }
     try {
         std::unique_ptr<sql::PreparedStatement> pstmt(
             conn->prepareStatement("INSERT INTO users(username, password_hash) VALUES (?, ?)"));
@@ -66,8 +102,28 @@ bool MysqlUtil::registerUser(const std::string& username, const std::string& pas
         int affectedRows = pstmt->executeUpdate();
         return affectedRows > 0;
     } catch (sql::SQLException &e) {
-        std::cerr << "注册用户失败: " << e.what() << std::endl;
-        return false;
+        // 检查是否是users表不存在的错误（SQLSTATE 42S02）
+        if (std::string(e.getSQLState()).substr(0, 5) == "42S02") {
+            if (createUsersTable()) {
+                try {
+                    std::unique_ptr<sql::PreparedStatement> pstmt(
+                        conn->prepareStatement("INSERT INTO users(username, password_hash) VALUES (?, ?)"));
+                    pstmt->setString(1, username);
+                    pstmt->setString(2, password_hash);
+                    int affectedRows = pstmt->executeUpdate();
+                    return affectedRows > 0;
+                } catch (sql::SQLException &e2) {
+                    std::cerr << "再次尝试注册用户失败: " << e2.what() << std::endl;
+                    return false;
+                }
+            } else {
+                std::cerr << "创建 users 表失败，无法注册用户" << std::endl;
+                return false;
+            }
+        } else{
+            std::cerr << "注册用户失败: " << e.what() << std::endl;
+            return false;
+        }
     }
 }
 
@@ -79,7 +135,9 @@ bool MysqlUtil::loginUser(const std::string& username, const std::string& passwo
         std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
         if (res->next()) {
             std::string storedHash = res->getString("password_hash");
-            return storedHash == password_hash; // 这里建议使用安全的哈希比较方法
+            return storedHash == password_hash;
+            // 使用crypto_memcmp时需要系统中事先安装 OpenSSL 开发库：sudo apt-get install libssl-dev
+            // return crypto_memcmp(storedHash.c_str(), password_hash.c_str(), storedHash.length()) == 0;
         } else {
             return false;
         }
