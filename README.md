@@ -46,7 +46,11 @@ Starting WikiLex-Searcher server...
 * 热词与搜索记录界面  
 ![image](https://github.com/user-attachments/assets/cf3fee26-c727-4456-9b85-fc3391d271cf)![image](https://github.com/user-attachments/assets/e71cef30-9ae9-494f-815b-19099047778b)
 
-此外经过构建编译后，还会在build下生成系列有关数据预处理和测试的程序，这些源代码都可以在scr目录下找到。
+* 搜索结果界面  
+![image](https://github.com/user-attachments/assets/87881829-0963-43dd-80af-0698652bb8d5)![image](https://github.com/user-attachments/assets/647dd3f7-6e21-4538-a9a3-d5632c0aedc1)
+
+如上所示，当搜索词条"fruit"的时候，返回给用户的不仅是文本匹配的单词，还有与之相关含义的词条，各种水果之类的单词。此外，WikiLex-Searcher还支持句子搜索，在这里不再做展示。  
+此外经过构建编译后，还会在build下生成系列有关数据预处理和测试的程序，这些源代码都可以在scr目录下找到。还需注意，项目中目前data下的词条数据不完整，需重新按照下面数据预处理步骤进行数据处理。
 
 ## 一. 数据预处理
 ### 1. 数据准备
