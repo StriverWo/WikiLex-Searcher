@@ -51,7 +51,27 @@ std::vector<float> ParseEmbeddingString(const std::string &embedding_str) {
 }
 
 
+// 打印欢迎信息和服务器启动信息
+void printWelcomeMessage() {
+    std::cout << R"(
+         _________ _       _________ _        _______                _______  _______  _______  _______  _______           _______  _______ 
+|\     /|\__   __/| \    /\\__   __/( \      (  ____ \|\     /|     (  ____ \(  ____ \(  ___  )(  ____ )(  ____ \|\     /|(  ____ \(  ____ )
+| )   ( |   ) (   |  \  / /   ) (   | (      | (    \/( \   / )     | (    \/| (    \/| (   ) || (    )|| (    \/| )   ( || (    \/| (    )|
+| | _ | |   | |   |  (_/ /    | |   | |      | (__     \ (_) /_____ | (_____ | (__    | (___) || (____)|| |      | (___) || (__    | (____)|
+| |( )| |   | |   |   _ (     | |   | |      |  __)     ) _ ((_____)(_____  )|  __)   |  ___  ||     __)| |      |  ___  ||  __)   |     __)
+| || || |   | |   |  ( \ \    | |   | |      | (       / ( ) \            ) || (      | (   ) || (\ (   | |      | (   ) || (      | (\ (   
+| () () |___) (___|  /  \ \___) (___| (____/\| (____/\( /   \ )     /\____) || (____/\| )   ( || ) \ \__| (____/\| )   ( || (____/\| ) \ \__
+(_______)\_______/|_/    \/\_______/(_______/(_______/|/     \|     \_______)(_______/|/     \||/   \__/(_______/|/     \|(_______/|/   \__/
+                                                                                                                                            
+)" << std::endl;
+    std::cout << "Welcome to WikiLex-Searcher - A semantic search engine implemented in C++!" << std::endl;
+    std::cout << "Starting WikiLex-Searcher server..." << std::endl;
+}
+
+
 int main() {
+    printWelcomeMessage();
+
     // 初始化 MySQL 客户端
     // 使用 tcp://127.0.0.1:3306，连接本地 MySQL ，user name为users，密码为“FangFang123!"" 数据库名为 wikilex
     // 传入用户名和用户密码
@@ -241,7 +261,7 @@ int main() {
         rsp.set_content(jsonString, "application/json");
     });
 
-    std::cout << "服务器启动成功......" << std::endl;
+    std::cout << "WikiLex-Searcher started successfully and is listening on port 8080..." << std::endl;
     svr.listen("0.0.0.0", 8080);
 
     return 0;
