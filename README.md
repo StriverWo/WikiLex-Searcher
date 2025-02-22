@@ -398,6 +398,7 @@ return K nearest elements from W to q
 ## 四. 文本向量化
 ### 1. Transformer
 参考链接：https://blog.csdn.net/weixin_42475060/article/details/121101749 ， https://www.zhihu.com/tardis/zm/art/600773858 。  
+还有B站视频连接：https://www.bilibili.com/video/BV1UL411g7aX?spm_id_from=333.788.player.player_end_recommend&vd_source=7e414d7e3fb06bf1809c5b43c40d9c30 。  
 这里只是我的学习记录笔记。  
 #### （1）Transformer整体结构
 机器翻译中，Transformer可以将一种语言翻译成另一种语言：  
@@ -428,6 +429,9 @@ Transformer中单词的输入表示由**单词Embedding**和**位置Embedding**�
 可由Word2vec等模型预训练得到，可以在Transformer中加入Embedding层。
 ##### b. 位置Embedding
 Transformer 中除了单词的Embedding，还需要使用位置Embedding 表示单词出现在句子中的位置。**因为 Transformer不采用RNN结构，而是使用全局信息，不能利用单词的顺序信息，而这部分信息对于NLP来说非常重要。**（这句话不太明白？）所以Transformer中使用位置Embedding保存单词在序列中的相对或绝对位置。
+
+![image](https://github.com/user-attachments/assets/9c395948-9a9c-4720-8115-6db46bf09268)
+
 
 #### （3）Multi-Head Attention（多头注意力机制）
 ![image](https://github.com/user-attachments/assets/ff9faba9-64fa-4029-8d4e-c63ddfcf180b)  
@@ -488,6 +492,9 @@ Output如图中所示，首先经过一次线性变换（线性变换层是一�
 
 ### 2. BERT模型
 参考博客：https://blog.csdn.net/star_nwe/article/details/143227601 和 https://blog.51cto.com/u_16163510/12673828 。  
+
+![image](https://github.com/user-attachments/assets/ad7d5c20-9674-4c80-a4f4-41e9ce921d85)
+
 **BERT（Bidirectional Encoder Representations from Transformers**是由 Google 于2018年提出的一种预训练语言模型。其核心特点有：  
 #### a. 双向上下文编码
 BERT 利用 Transformer 结构的自注意力机制对文本进行双向编码，这意味着在生成每个词的表示时，会同时考虑该词左右两侧的上下文信息，从而捕捉更丰富的语义。  
